@@ -13,11 +13,13 @@
 #define QDCY1(v) (context->v[y1])
 #define QDCY2(v) (context->v[y2])
 #define QDCXY(v) (context->v[(y  * context->xSize) + x ])
+#define QDCYX(v) (context->v[(x  * context->ySize) + y ])
 #define QDCXX(v) (context->v[(x2 * context->xSize) + x1])
 #define QDCYY(v) (context->v[(y2 * context->ySize) + y1])
 #define QDCXXr(v) (context->v[(x1 * context->xSize) + x2])
 #define QDCYYr(v) (context->v[(y1 * context->ySize) + y2])
 #define QDCXYc(v, x, y) (context->v[((y) * context->xSize) + (x)])
+#define QDCYXc(v, x, y) (context->v[((x) * context->ySize) + (y)])
 #define QDCEachX() for (x = 0; x < context->xSize; ++x)
 #define QDCEachX1() for (x1 = 0; x1 < context->xSize; ++x1)
 #define QDCEachX2() for (x2 = 0; x2 < context->xSize; ++x2)
@@ -42,7 +44,7 @@ typedef struct {
     /*    Y  */ qdcint *yCount;
     /* X     */ qdcfloat *xAve; // if xCount
     /*    Y  */ qdcfloat *yAve; // if yCount
-    /* X  Y  */ qdcfloat *xAbove; // if count xCount
+    /* Y  X  */ qdcfloat *xAbove; // if count xCount
     /* X  Y  */ qdcfloat *yAbove; // if count yCount
     /* X     */ qdcfloat *xRDelta; // if xCount
     /*    Y  */ qdcfloat *yRDelta; // if yCount
@@ -120,18 +122,20 @@ qdcfloat sqr(qdcfloat v) {
 }
 
 qdcfloat rSqrt(qdcfloat v) {
-// #ifdef QDCEVIL
-#if 0
-    qdcint i;
+#ifdef QDCEVIL
+// #if 0
+    // method from Quake 3
+    // for float only !!!
+    int i;
     float half;
     float result;
 
     half = v * 0.5f;
     result = v;
 
-    i = *(long *) &result;
+    i = *(int *) &result;
     i = 0x5f375a86 - (i >> 1); // Evil!
-    result = *(qdcfloat *) &i;
+    result = *(float *) &i;
 
     result = result * (1.5f - (half * result * result));
     result = result * (1.5f - (half * result * result));
@@ -197,7 +201,7 @@ void qdcFileLoad(qdcContext *context, FILE *input) { // count sum
     qdcfloat value;
 
     // format: x y i value
-    // "%ld %ld %*ld %lf\n"
+    // "%ld %ld %*ld %f\n"
 #ifdef QDCEVIL
     x = 0;
     y = 0;
@@ -287,9 +291,9 @@ void qdcAbove(qdcContext *context) { // xAbove yAbove
         if (QDCY(yCount)) {
             QDCEachX() {
                 if (QDCXY(count)) {
-                    QDCXY(xAbove) = QDCXY(value) - QDCY(yAve);
+                    QDCYX(yAbove) = QDCXY(value) - QDCY(yAve);
                 } else {
-                    QDCXY(xAbove) = 0; // for qdcSim()
+                    QDCYX(yAbove) = 0; // for qdcSim()
                 }
             }
         }
@@ -299,7 +303,7 @@ void qdcAbove(qdcContext *context) { // xAbove yAbove
         if (QDCX(xCount)) {
             QDCEachY() {
                 if (QDCXY(count)) {
-                    QDCXY(yAbove) = QDCXY(value) - QDCX(xAve);
+                    QDCXY(xAbove) = QDCXY(value) - QDCX(xAve);
                 } else {
                     QDCXY(xAbove) = 0; // for qdcSim()
                 }
@@ -319,7 +323,7 @@ void qdcRDelta(qdcContext *context) { // xRDelta yRDelta
 
             QDCEachX() {
                 if (QDCXY(count)) {
-                    sum += sqr(QDCXY(yAbove));
+                    sum += sqr(QDCXY(xAbove));
                 }
             }
 
@@ -333,7 +337,7 @@ void qdcRDelta(qdcContext *context) { // xRDelta yRDelta
 
             QDCEachY() {
                 if (QDCXY(count)) {
-                    sum += sqr(QDCXY(xAbove));
+                    sum += sqr(QDCYX(yAbove));
                 }
             }
 
@@ -360,7 +364,7 @@ void qdcSim(qdcContext *context) { // xxSim yySim
 
                     QDCEachX() {
                         // if (QDCXYc(count, x, y1) && QDCXYc(count, x, y2)) {
-                            sum += QDCXYc(yAbove, x, y1) * QDCXYc(yAbove, x, y2);
+                            sum += QDCXYc(xAbove, x, y1) * QDCXYc(xAbove, x, y2);
                         // }
                     }
 
@@ -380,7 +384,7 @@ void qdcSim(qdcContext *context) { // xxSim yySim
 
                     QDCEachY() {
                         // if (QDCXYc(count, x1, y) && QDCXYc(count, x2, y)) {
-                            sum += QDCXYc(xAbove, x1, y) * QDCXYc(xAbove, x2, y);
+                            sum += QDCYXc(yAbove, x1, y) * QDCYXc(yAbove, x2, y);
                         // }
                     }
 
@@ -403,15 +407,15 @@ void qdcPValue(qdcContext *context) { // xPValue yPValue
     qdcfloat sum;
     qdcfloat bsum;
 
-    QDCEachX() {
-        QDCEachY2() {
-            if (QDCY2(yCount)) {
+    QDCEachY2() {
+        if (QDCY2(yCount)) {
+            QDCEachX() {
                 sum = 0;
                 bsum = 0;
 
                 QDCEachY1() {
                     if (QDCY1(yCount) && QDCYY(yySim) >= 0) {
-                        sum += QDCYY(yySim) * QDCXYc(yAbove, x, y1);
+                        sum += QDCYY(yySim) * QDCYXc(yAbove, x, y1);
                         bsum += QDCYY(yySim);
                     }
                 }
@@ -425,9 +429,9 @@ void qdcPValue(qdcContext *context) { // xPValue yPValue
         }
     }
 
-    QDCEachY() {
-        QDCEachX2() {
-            if (QDCX2(xCount)) {
+    QDCEachX2() {
+        if (QDCX2(xCount)) {
+            QDCEachY() {
                 sum = 0;
                 bsum = 0;
 
@@ -478,16 +482,32 @@ void qdcFileSave(qdcContext *context, FILE *output) {
 #ifdef QDCXFIRST
     QDCEachX() {
         QDCEachY() {
-            fprintf(output, "%ld %ld %lf %lf\n", x, y, QDCXY(value), QDCXY(result));
+            fprintf(output, "%ld %ld %f %f\n", x, y, QDCXY(value), QDCXY(result));
         }
     }
 #else
     QDCEachY() {
         QDCEachX() {
-            fprintf(output, "%ld %ld %lf %lf\n", y, x, QDCXY(value), QDCXY(result));
+            fprintf(output, "%ld %ld %f %f\n", y, x, QDCXY(value), QDCXY(result));
         }
     }
 #endif
+}
+
+qdcfloat qdcDelta(qdcContext *context) {
+    qdcint x;
+    qdcint y;
+    qdcfloat result = 0;
+
+    QDCEachY() {
+        QDCEachX() {
+            if (QDCXY(count)) {
+                result += sqr(QDCXY(value) - QDCXY(result));
+            }
+        }
+    }
+
+    return result;
 }
 
 void qdcFree(qdcContext *context) {
@@ -556,6 +576,9 @@ int main() {
     output = fopen("out.txt", "w");
     qdcFileSave(qdc, output);
     fclose(output);
+
+    /* info */ printf("Calculate delta\n");
+    printf("Delta = %f\n", qdcDelta(qdc));
 
     /* info */ printf("Free memory\n");
     qdcFree(qdc);
