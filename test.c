@@ -63,9 +63,9 @@ qdcint fgetd(FILE *input) {
     qdcint new;
 
     while (1) {
-        new = fgetc(input);
-        if (new >= '0'/* && new <= '9'*/) {
-            result = result * 10 + (new - '0');
+        new = fgetc(input) - '0';
+        if (new >= 0/* && new <= 9*/) {
+            result = result * 10 + new;
         } else {
             break;
         }
@@ -78,8 +78,8 @@ void fgetdi(FILE *input) {
     qdcint new;
 
     while (1) {
-        new = fgetc(input);
-        if (new >= '0'/* && new <= '9'*/) {
+        new = fgetc(input) - '0';
+        if (new >= 0/* && new <= 9*/) {
             // nothing
         } else {
             break;
@@ -99,18 +99,18 @@ qdcfloat fgetf(FILE *input) {
     qdcint new;
 
     while (1) {
-        new = fgetc(input);
-        if (new >= '0'/* && new <= '9'*/) {
-            result = result * 10 + (new - '0');
+        new = fgetc(input) - '0';
+        if (new >= 0/* && new <= 9*/) {
+            result = result * 10 + new;
         } else {
             break;
         }
     }
 
     while (1) {
-        new = fgetc(input);
-        if (new >= '0'/* && new <= '9'*/) {
-            result = result * 10 + (new - '0');
+        new = fgetc(input) - '0';
+        if (new >= 0/* && new <= 9*/) {
+            result = result * 10 + new;
             count++;
         } else {
             break;
@@ -208,11 +208,18 @@ void qdcFileLoad(qdcContext *context, FILE *input) { // count sum
     // "%ld %ld %*ld %f\n"
 #ifdef QDCEVIL
     // for well-formatted data only
+    qdcint fsize;
+
+    fseek(input, 0, SEEK_END);
+    fsize = ftell(input);
+    fseek(input, 0, SEEK_SET);
+
     x = 0;
     y = 0;
     QDCXY(count)--; // last line is null
 
     while (!feof(input)) {
+    // while (ftell(input) != fsize) {
   #ifdef QDCXFIRST
         x = fgetd(input);
         y = fgetd(input);
