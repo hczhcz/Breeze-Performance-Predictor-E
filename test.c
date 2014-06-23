@@ -12,35 +12,39 @@
 #define QDCXY(v) (context->v[(y  * context->xSize) + x ])
 #define QDCXX(v) (context->v[(x2 * context->xSize) + x1])
 #define QDCYY(v) (context->v[(y2 * context->xSize) + y1])
-#define QDCXY2(v, x, y) (context->v[((y) * context->xSize) + (x)])
+#define QDCXXr(v) (context->v[(x1 * context->xSize) + x2])
+#define QDCYYr(v) (context->v[(y1 * context->xSize) + y2])
+#define QDCXYc(v, x, y) (context->v[((y) * context->xSize) + (x)])
 #define QDCEachX() for (x = 0; x < context->xSize; ++x)
-#define QDCEachX1() for (x1 = x2 + 1; x1 < context->xSize; ++x1)
+#define QDCEachX1() for (x1 = 0; x1 < context->xSize; ++x1)
 #define QDCEachX2() for (x2 = 0; x2 < context->xSize; ++x2)
+#define QDCEachX1x() for (x1 = x2; x1 < context->xSize; ++x1)
 #define QDCEachY() for (y = 0; y < context->ySize; ++y)
-#define QDCEachY1() for (y1 = y2 + 1; y1 < context->ySize; ++y1)
+#define QDCEachY1() for (y1 = 0; y1 < context->ySize; ++y1)
 #define QDCEachY2() for (y2 = 0; y2 < context->ySize; ++y2)
+#define QDCEachY1x() for (y1 = y2; y1 < context->ySize; ++y1)
 // #define QDCScan(p, begin, end) for (p = begin; p != end; ++p)
 // #define QDCEachX() for ()
 
 typedef struct {
     int xSize;
     int ySize;
-    int *count;
-    float *sum;
-    float *value; // if count, sum / count
-    int *xCount;
-    int *yCount;
-    float *xAve; // if xCount
-    float *yAve; // if yCount
-    float *xAbove; // if xCount
-    float *yAbove; // if yCount
-    float *xRDelta; // if xCount
-    float *yRDelta; // if yCount
-    float *xxSim; // if x1 > x2 xCount1 xCount2
-    float *yySim; // if y1 > y2 yCount1 yCount2
-    float *xPValue;
-    float *yPValue;
-    float *result;
+    /* X  Y  */ int *count;
+    /* X  Y  */ float *sum;
+    /* X  Y  */ float *value; // if count, sum / count
+    /* X     */ int *xCount;
+    /*    Y  */ int *yCount;
+    /* X     */ float *xAve; // if xCount
+    /*    Y  */ float *yAve; // if yCount
+    /* X  Y  */ float *xAbove; // if count xCount
+    /* X  Y  */ float *yAbove; // if count yCount
+    /* X     */ float *xRDelta; // if xCount
+    /*    Y  */ float *yRDelta; // if yCount
+    /* X1 X2 */ float *xxSim; // if xCount1 xCount2
+    /* Y1 Y2 */ float *yySim; // if yCount1 yCount2
+    /* X  Y  */ float *xPValue; // if xCount yCount
+    /* X  Y  */ float *yPValue; // if xCount yCount
+    /* X  Y  */ float *result;
 } qdcContext;
 
 float sqr(float v) {
@@ -185,6 +189,8 @@ void qdcAbove(qdcContext *context) { // xAbove yAbove
             QDCEachX() {
                 if (QDCXY(count)) {
                     QDCXY(xAbove) = QDCXY(value) - QDCY(yAve);
+                } else {
+                    QDCXY(xAbove) = 0; // for qdcSim()
                 }
             }
         }
@@ -195,6 +201,8 @@ void qdcAbove(qdcContext *context) { // xAbove yAbove
             QDCEachY() {
                 if (QDCXY(count)) {
                     QDCXY(yAbove) = QDCXY(value) - QDCX(xAve);
+                } else {
+                    QDCXY(xAbove) = 0; // for qdcSim()
                 }
             }
         }
@@ -243,46 +251,124 @@ void qdcSim(qdcContext *context) { // xxSim yySim
     int y1;
     int y2;
     float sum;
-    float ave1;
-    float ave2;
+    float result;
 
-    QDCEachX2() {
-        QDCEachX1() {
-            if (QDCX1(xCount) > 0 && QDCX2(xCount) > 0) {
-                sum = 0;
-                ave1 = QDCX1(xAve);
-                ave2 = QDCX2(xAve);
+    QDCEachY2() {
+        if (QDCY2(yCount)) {
+            QDCEachY1x() {
+                if (QDCY1(yCount)) {
+                    sum = 0;
 
-                QDCEachY() {
-                    sum += (QDCXY2(value, x1, y) - ave1) * (QDCXY2(value, x2, y) - ave2);
+                    QDCEachX() {
+                        // if (QDCXYc(count, x, y1) && QDCXYc(count, x, y2)) {
+                            sum += QDCXYc(yAbove, x, y1) * QDCXYc(yAbove, x, y2);
+                        // }
+                    }
+
+                    result = sum * QDCY1(yRDelta) * QDCY2(yRDelta);
+                    QDCYY(yySim) = result;
+                    QDCYYr(yySim) = result;
                 }
-
-                QDCXX(xxSim) = sum * QDCX1(xRDelta) * QDCX2(xRDelta);
             }
         }
     }
 
-    QDCEachY2() {
-        QDCEachY1() {
-            if (QDCY1(yCount) > 0 && QDCY2(yCount) > 0) {
-                sum = 0;
-                ave1 = QDCY1(yAve);
-                ave2 = QDCY2(yAve);
+    QDCEachX2() {
+        if (QDCX2(xCount)) {
+            QDCEachX1x() {
+                if (QDCX1(xCount)) {
+                    sum = 0;
 
-                QDCEachX() {
-                    sum += (QDCXY2(value, x, y1) - ave1) * (QDCXY2(value, x, y2) - ave2);
+                    QDCEachY() {
+                        // if (QDCXYc(count, x1, y) && QDCXYc(count, x2, y)) {
+                            sum += QDCXYc(xAbove, x1, y) * QDCXYc(xAbove, x2, y);
+                        // }
+                    }
+
+                    result = sum * QDCX1(xRDelta) * QDCX2(xRDelta);
+                    QDCXX(xxSim) = result;
+                    QDCXXr(xxSim) = result;
                 }
-
-                QDCYY(yySim) = sum * QDCY1(yRDelta) * QDCY2(yRDelta);
             }
         }
     }
 }
 
 void qdcPValue(qdcContext *context) { // xPValue yPValue
+    int x;
+    int y;
+    int x1;
+    int x2;
+    int y1;
+    int y2;
+    float sum;
+    float bsum;
+
+    QDCEachX() {
+        QDCEachY2() {
+            if (QDCY2(yCount)) {
+                sum = 0;
+                bsum = 0;
+
+                QDCEachY1() {
+                    if (QDCY1(yCount)) {
+                        sum += QDCYY(yySim) * QDCXYc(yAbove, x, y2);
+                        bsum += QDCYY(yySim);
+                    }
+                }
+
+                if (bsum > 0) {
+                    QDCXYc(yPValue, x, y2) = QDCY2(yAve) + sum / bsum;
+                } else {
+                    QDCXYc(yPValue, x, y2) = QDCY2(yAve);
+                }
+            }
+        }
+    }
+
+    QDCEachY() {
+        QDCEachX2() {
+            if (QDCX2(xCount)) {
+                sum = 0;
+                bsum = 0;
+
+                QDCEachX1() {
+                    if (QDCX1(xCount)) {
+                        sum += QDCXX(xxSim) * QDCXYc(xAbove, x2, y);
+                        bsum += QDCXX(xxSim);
+                    }
+                }
+
+                if (bsum > 0) {
+                    QDCXYc(xPValue, x2, y) = QDCX2(xAve) + sum / bsum;
+                } else {
+                    QDCXYc(xPValue, x2, y) = QDCX2(xAve);
+                }
+            }
+        }
+    }
 }
 
 void qdcResult(qdcContext *context) { // result
+    int x;
+    int y;
+
+    QDCEachY() {
+        QDCEachX() {
+            if (QDCX(xCount) && QDCY(yCount)) {
+                // take both
+                // TODO
+
+                QDCXY(result) = 0.5 * QDCXY(xPValue) + 0.5 * QDCXY(yPValue);
+            } else if (QDCX(xCount)) {
+                QDCXY(result) = QDCXY(xPValue);
+            } else if (QDCY(yCount)) {
+                QDCXY(result) = QDCXY(yPValue);
+            } else {
+                // no data
+            }
+        }
+    }
 }
 
 void qdcFileSave(qdcContext *context, FILE *output) {
@@ -327,6 +413,7 @@ int main() {
     qdcAbove(qdc);
     qdcRDelta(qdc);
     qdcSim(qdc);
+    // TODO: filter sim(k), if small, set to 0
     qdcPValue(qdc);
     qdcResult(qdc);
 
