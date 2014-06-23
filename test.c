@@ -3,6 +3,8 @@
 #include <math.h>
 
 // #define QDCEVIL
+#define QDCMEM
+
 #define QDCX(v) (context->v[x])
 #define QDCX1(v) (context->v[x1])
 #define QDCX2(v) (context->v[x2])
@@ -80,7 +82,7 @@ void qdcBaseInit() {
 
     qdcRevBuf[0] = 0;
     for (i = 1; i < 65536; ++i) {
-        qdcRevBuf[i] = 1 / i;
+        qdcRevBuf[i] = 1.0 / (float) i;
     }
 }
 
@@ -123,7 +125,15 @@ void qdcClear(qdcContext *context) { // count sum = 0
 }
 
 void qdcFileLoad(qdcContext *context, FILE *input) { // count sum
+    int x;
+    int y;
+    int i;
+    float value;
 
+    while (fscanf(input, "%d %d %d %f\n", &x, &y, &i, &value) == 4) {
+        QDCXY(sum) += value;
+        QDCXY(count)++;
+    }
 }
 
 void qdcValue(qdcContext *context) { // value
@@ -311,8 +321,8 @@ void qdcPValue(qdcContext *context) { // xPValue yPValue
                 bsum = 0;
 
                 QDCEachY1() {
-                    if (QDCY1(yCount)) {
-                        sum += QDCYY(yySim) * QDCXYc(yAbove, x, y2);
+                    if (QDCY1(yCount) && QDCYY(yySim) >= 0) {
+                        sum += QDCYY(yySim) * QDCXYc(yAbove, x, y1);
                         bsum += QDCYY(yySim);
                     }
                 }
@@ -333,8 +343,8 @@ void qdcPValue(qdcContext *context) { // xPValue yPValue
                 bsum = 0;
 
                 QDCEachX1() {
-                    if (QDCX1(xCount)) {
-                        sum += QDCXX(xxSim) * QDCXYc(xAbove, x2, y);
+                    if (QDCX1(xCount) && QDCXX(xxSim) >= 0) {
+                        sum += QDCXX(xxSim) * QDCXYc(xAbove, x1, y);
                         bsum += QDCXX(xxSim);
                     }
                 }
@@ -372,6 +382,16 @@ void qdcResult(qdcContext *context) { // result
 }
 
 void qdcFileSave(qdcContext *context, FILE *output) {
+    int x;
+    int y;
+
+    // QDCEachY() {
+    QDCEachX() {
+        // QDCEachX() {
+        QDCEachY() {
+            fprintf(output, "%d %d %f %f\n", x, y, QDCXY(value), QDCXY(result));
+        }
+    }
 }
 
 void qdcFree(qdcContext *context) {
@@ -399,28 +419,45 @@ int main() {
     FILE *input;
     FILE *output;
 
+    /* info */ printf("Init system\n");
     qdcBaseInit();
 
+    /* info */ printf("Allocate memory\n");
     qdc = qdcInit(142, 4500);
+    /* info */ printf("Fill zero\n");
     qdcClear(qdc);
 
+    /* info */ printf("Load input\n");
+#ifdef QDCMEM
+    input = fopen("/dev/shm/in.txt", "r");
+#else
     input = fopen("in.txt", "r");
+#endif
     qdcFileLoad(qdc, input);
     fclose(input);
 
+    /* info */ printf("Parse 1: value\n");
     qdcValue(qdc);
+    /* info */ printf("Parse 1: average\n");
     qdcAve(qdc);
+    /* info */ printf("Parse 1: above\n");
     qdcAbove(qdc);
+    /* info */ printf("Parse 2: rev delta\n");
     qdcRDelta(qdc);
+    /* info */ printf("Parse 2: sim\n");
     qdcSim(qdc);
     // TODO: filter sim(k), if small, set to 0
+    /* info */ printf("Parse 3: p value\n");
     qdcPValue(qdc);
+    /* info */ printf("Parse 3: result\n");
     qdcResult(qdc);
 
+    /* info */ printf("Save output\n");
     output = fopen("out.txt", "w");
     qdcFileSave(qdc, output);
     fclose(output);
 
+    /* info */ printf("Free memory\n");
     qdcFree(qdc);
 
     return 0;
