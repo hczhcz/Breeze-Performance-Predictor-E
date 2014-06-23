@@ -50,6 +50,69 @@ typedef struct {
     /* X  Y  */ float *result;
 } qdcContext;
 
+int fgetd(FILE *input) {
+    int result = 0;
+    int new;
+
+    while (1) {
+        new = fgetc(input);
+        if (new >= '0' && new <= '9') {
+            result = result * 10 + (new - '0');
+        } else {
+            break;
+        }
+    }
+
+    return result;
+}
+
+void fgetdi(FILE *input) {
+    int new;
+
+    while (1) {
+        new = fgetc(input);
+        if (new >= '0' && new <= '9') {
+            // nothing
+        } else {
+            break;
+        }
+    }
+}
+
+float fgetff(FILE *input) {
+    const float rev10[16] = {
+        1,     1e-1,  1e-2,  1e-3,
+        1e-4,  1e-5,  1e-6,  1e-7,
+        1e-8,  1e-9,  1e-10, 1e-11,
+        1e-12, 1e-13, 1e-14, 1e-15,
+    };
+    int result = 0;
+    int count = 0;
+    int new;
+
+    while (1) {
+        new = fgetc(input);
+        if (new >= '0' && new <= '9') {
+            result = result * 10 + (new - '0');
+            count++;
+        } else {
+            break;
+        }
+    }
+
+    return rev10[count] * (float) result;
+}
+
+float fgetf(FILE *input) {
+    float a = 0;
+    float b = 0;
+
+    a = fgetd(input);
+    b = fgetff(input);
+
+    return a + b;
+}
+
 float sqr(float v) {
     return v * v;
 }
@@ -132,20 +195,28 @@ void qdcFileLoad(qdcContext *context, FILE *input) { // count sum
 
     // format: x y i value
     // "%d %d %*d %f\n"
-/*#ifdef QDCEVIL
-    char buf[32];
+#ifdef QDCEVIL
+    x = 0;
+    y = 0;
+    QDCXY(count)--; // last line is null
+
+    while (!feof(input)) {
   #ifdef QDCXFIRST
-    while (fgets(buf, 32, input), sscanf(buf, "%d%d%*s%f", &x, &y, &value) == 3) {
+        x = fgetd(input);
+        y = fgetd(input);
   #else
-    while (fgets(buf, 32, input), sscanf(buf, "%d%d%*s%f", &y, &x, &value) == 3) {
+        y = fgetd(input);
+        x = fgetd(input);
   #endif
-#else*/
+        fgetdi(input);
+        value = fgetf(input);
+#else
   #ifdef QDCXFIRST
     while (fscanf(input, "%d%d%*s%f", &x, &y, &value) == 3) {
   #else
     while (fscanf(input, "%d%d%*s%f", &y, &x, &value) == 3) {
   #endif
-//#endif
+#endif
         QDCXY(sum) += value;
         QDCXY(count)++;
     }
