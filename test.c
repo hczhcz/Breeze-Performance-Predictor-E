@@ -6,7 +6,8 @@
 #define QDCMEMFILE
 #define QDCEVIL
 #define QDCXFIRST
-#define QDCTRANSFORM 2
+#define QDCTRANSFORM 1
+#define QDCDLAMBDA 1
 
 #ifdef QDCEVIL
   #include <xmmintrin.h>
@@ -47,14 +48,19 @@
 #define QDCYYr(v) (context->v[(y1 * context->ySizeA) + y2])
 #define QDCXYc(v, x, y) (context->v[((y) * context->xSizeA) + (x)])
 #define QDCYXc(v, x, y) (context->v[((x) * context->ySizeA) + (y)])
-#define QDCEachX() for (x = 0; x < context->xSize; ++x)
-#define QDCEachX1() for (x1 = 0; x1 < context->xSize; ++x1)
-#define QDCEachX2() for (x2 = 0; x2 < context->xSize; ++x2)
+
+#define QDCEachX()   for (x = 0;   x  < context->xSize; ++x)
+#define QDCEachX1()  for (x1 = 0;  x1 < context->xSize; ++x1)
+#define QDCEachX2()  for (x2 = 0;  x2 < context->xSize; ++x2)
 #define QDCEachX1x() for (x1 = x2; x1 < context->xSize; ++x1)
-#define QDCEachY() for (y = 0; y < context->ySize; ++y)
-#define QDCEachY1() for (y1 = 0; y1 < context->ySize; ++y1)
-#define QDCEachY2() for (y2 = 0; y2 < context->ySize; ++y2)
+#define QDCEachX4()  for (x = 0;   x  < context->xSize; x  += 4)
+#define QDCEachX14() for (x1 = 0;  x1 < context->xSize; x1 += 4)
+#define QDCEachY()   for (y = 0;   y  < context->ySize; ++y)
+#define QDCEachY1()  for (y1 = 0;  y1 < context->ySize; ++y1)
+#define QDCEachY2()  for (y2 = 0;  y2 < context->ySize; ++y2)
 #define QDCEachY1x() for (y1 = y2; y1 < context->ySize; ++y1)
+#define QDCEachY4()  for (y = 0;   y  < context->ySize; y  += 4)
+#define QDCEachY14() for (y1 = 0;  y1 < context->ySize; y1 += 4)
 
 #define QDCMessage(x) printf("[%10ld] " x "\n", clock())
 
@@ -406,27 +412,50 @@ void qdcSim(qdcContext *context) { // xxSim yySim
     qdcint y1;
     qdcint y2;
     qdcfloat sum;
+#ifdef QDCEVIL_SSE
+    __m128 sum_sse;
+#endif
     qdcfloat result;
 
     QDCEachY2() {
         if (QDCY2(yCount)) {
             QDCEachY1x() {
                 if (QDCY1(yCount)) {
+#ifdef QDCEVIL_SSE
+                    sum_sse = _mm_setzero_ps();
+
+                    QDCEachX4() {
+                        sum_sse = _mm_add_ps(
+                            sum_sse,
+                            _mm_mul_ps(_mm_load_ps(&QDCXYc(xAbove, x, y1)), _mm_load_ps(&QDCXYc(xAbove, x, y2)))
+                        );
+                    }
+
+                    sum = sum_sse[0] + sum_sse[1]
+                        + sum_sse[2] + sum_sse[3];
+#else
                     sum = 0;
 
                     QDCEachX() {
-#ifdef QDCEVIL_WEAKCHECK
+  #ifdef QDCEVIL_WEAKCHECK
                         if (1) {
-#else
+  #else
                         if (QDCXYc(count, x, y1) && QDCXYc(count, x, y2)) {
-#endif
+  #endif
                             sum += QDCXYc(xAbove, x, y1) * QDCXYc(xAbove, x, y2);
                         }
                     }
+#endif
 
-                    result = sum * QDCY1(yRDelta) * QDCY2(yRDelta);
-                    QDCYY(yySim) = result;
-                    QDCYYr(yySim) = result;
+#ifdef QDCEVIL_WEAKCHECK
+                    if (*(int *) &sum >= 0) { // check sign bit only
+#else
+                    if (sum >= 0) {
+#endif
+                        result = sum * QDCY1(yRDelta) * QDCY2(yRDelta);
+                        QDCYY(yySim) = result;
+                        QDCYYr(yySim) = result;
+                    }
                 }
             }
         }
@@ -436,21 +465,41 @@ void qdcSim(qdcContext *context) { // xxSim yySim
         if (QDCX2(xCount)) {
             QDCEachX1x() {
                 if (QDCX1(xCount)) {
+#ifdef QDCEVIL_SSE
+                    sum_sse = _mm_setzero_ps();
+
+                    QDCEachY4() {
+                        sum_sse = _mm_add_ps(
+                            sum_sse,
+                            _mm_mul_ps(_mm_load_ps(&QDCYXc(yAbove, x1, y)), _mm_load_ps(&QDCYXc(yAbove, x2, y)))
+                        );
+                    }
+
+                    sum = sum_sse[0] + sum_sse[1]
+                        + sum_sse[2] + sum_sse[3];
+#else
                     sum = 0;
 
                     QDCEachY() {
-#ifdef QDCEVIL_WEAKCHECK
+  #ifdef QDCEVIL_WEAKCHECK
                         if (1) {
-#else
+  #else
                         if (QDCXYc(count, x1, y) && QDCXYc(count, x2, y)) {
-#endif
+  #endif
                             sum += QDCYXc(yAbove, x1, y) * QDCYXc(yAbove, x2, y);
                         }
                     }
+#endif
 
-                    result = sum * QDCX1(xRDelta) * QDCX2(xRDelta);
-                    QDCXX(xxSim) = result;
-                    QDCXXr(xxSim) = result;
+#ifdef QDCEVIL_WEAKCHECK
+                    if (*(int *) &sum >= 0) { // check sign bit only
+#else
+                    if (sum >= 0) {
+#endif
+                        result = sum * QDCX1(xRDelta) * QDCX2(xRDelta);
+                        QDCXX(xxSim) = result;
+                        QDCXXr(xxSim) = result;
+                    }
                 }
             }
         }
@@ -464,30 +513,44 @@ void qdcPValue(qdcContext *context) { // xPValue yPValue
     qdcint x2;
     qdcint y1;
     qdcint y2;
-//#ifdef QDCEVIL_SSE
-    __m128 sum_sse;
-    __m128 bsum_sse;
-//#else
     qdcfloat sum;
     qdcfloat bsum;
-//#endif
+#ifdef QDCEVIL_SSE
+    __m128 sum_sse;
+    __m128 bsum_sse;
+#endif
 
     QDCEachY2() {
         if (QDCY2(yCount)) {
             QDCEachX() {
+#ifdef QDCEVIL_SSE
+                sum_sse = _mm_setzero_ps();
+                bsum_sse = _mm_setzero_ps();
+
+                QDCEachY14() {
+                    sum_sse = _mm_add_ps(
+                        sum_sse,
+                        _mm_mul_ps(_mm_load_ps(&QDCYY(yySim)), _mm_load_ps(&QDCYXc(yAbove, x, y1)))
+                    );
+                    bsum_sse = _mm_add_ps(
+                        bsum_sse,
+                        _mm_load_ps(&QDCYY(yySim))
+                    );
+                }
+
+                sum = sum_sse[0] + sum_sse[1]
+                    + sum_sse[2] + sum_sse[3];
+                bsum = bsum_sse[0] + bsum_sse[1]
+                     + bsum_sse[2] + bsum_sse[3];
+#else
                 sum = 0;
                 bsum = 0;
 
                 QDCEachY1() {
-#ifdef QDCEVIL_WEAKCHECK
-                    if (*(int *) &QDCYY(yySim) >= 0) { // check sign bit only
-#else
-                    if (QDCYY(yySim) >= 0) {
-#endif
-                        sum += QDCYY(yySim) * QDCYXc(yAbove, x, y1);
-                        bsum += QDCYY(yySim);
-                    }
+                    sum += QDCYY(yySim) * QDCYXc(yAbove, x, y1);
+                    bsum += QDCYY(yySim);
                 }
+#endif
 
                 if (bsum > 0) {
                     QDCXYc(yPValue, x, y2) = QDCY2(yAve) + sum / bsum;
@@ -501,19 +564,34 @@ void qdcPValue(qdcContext *context) { // xPValue yPValue
     QDCEachX2() {
         if (QDCX2(xCount)) {
             QDCEachY() {
+#ifdef QDCEVIL_SSE
+                sum_sse = _mm_setzero_ps();
+                bsum_sse = _mm_setzero_ps();
+
+                QDCEachX14() {
+                    sum_sse = _mm_add_ps(
+                        sum_sse,
+                        _mm_mul_ps(_mm_load_ps(&QDCXX(xxSim)), _mm_load_ps(&QDCXYc(xAbove, x1, y)))
+                    );
+                    bsum_sse = _mm_add_ps(
+                        bsum_sse,
+                        _mm_load_ps(&QDCXX(xxSim))
+                    );
+                }
+
+                sum = sum_sse[0] + sum_sse[1]
+                    + sum_sse[2] + sum_sse[3];
+                bsum = bsum_sse[0] + bsum_sse[1]
+                     + bsum_sse[2] + bsum_sse[3];
+#else
                 sum = 0;
                 bsum = 0;
 
                 QDCEachX1() {
-#ifdef QDCEVIL_WEAKCHECK
-                    if (*(int *) &QDCXX(xxSim) >= 0) { // check sign bit only
-#else
-                    if (QDCXX(xxSim) >= 0) {
-#endif
-                        sum += QDCXX(xxSim) * QDCXYc(xAbove, x1, y);
-                        bsum += QDCXX(xxSim);
-                    }
+                    sum += QDCXX(xxSim) * QDCXYc(xAbove, x1, y);
+                    bsum += QDCXX(xxSim);
                 }
+#endif
 
                 if (bsum > 0) {
                     QDCXYc(xPValue, x2, y) = QDCX2(xAve) + sum / bsum;
@@ -533,14 +611,25 @@ void qdcResult(qdcContext *context) { // result
     QDCEachY() {
         QDCEachX() {
             if (QDCX(xCount) && QDCY(yCount)) {
+#if QDCDLAMBDA == 1
+                result = (
+                    QDCX(xAve) * QDCXY(xPValue) + QDCY(yAve) * QDCXY(yPValue)
+                ) / (QDCX(xAve) + QDCY(yAve));
+#elif QDCDLAMBDA == 2
+                result = (
+                    sqr(QDCXY(xPValue)) + sqr(QDCXY(yPValue))
+                ) / (QDCXY(xPValue) + QDCXY(yPValue));
+#else
                 result = context->lambda * QDCXY(xPValue)
                        + (1 - context->lambda) * QDCXY(yPValue);
+#endif
             } else if (QDCX(xCount)) {
                 result = QDCXY(xPValue);
             } else if (QDCY(yCount)) {
                 result = QDCXY(yPValue);
             } else {
                 // no data
+                result = 0;
             }
 #ifdef QDCTRANSFORM
             QDCXY(result) = QDCAfter(result);
