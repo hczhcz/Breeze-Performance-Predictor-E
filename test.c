@@ -1,10 +1,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <time.h>
 
-#define QDCMEM
+#define QDCMEMFILE
 #define QDCEVIL
-// #define QDCXFIRST
+#define QDCXFIRST
 
 #define QDCX(v) (context->v[x])
 #define QDCX1(v) (context->v[x1])
@@ -28,8 +29,8 @@
 #define QDCEachY1() for (y1 = 0; y1 < context->ySize; ++y1)
 #define QDCEachY2() for (y2 = 0; y2 < context->ySize; ++y2)
 #define QDCEachY1x() for (y1 = y2; y1 < context->ySize; ++y1)
-// #define QDCScan(p, begin, end) for (p = begin; p != end; ++p)
-// #define QDCEachX() for ()
+
+#define QDCMessage(x) printf("[%10ld] " x "\n", clock())
 
 typedef long qdcint;
 typedef float qdcfloat;
@@ -37,6 +38,8 @@ typedef float qdcfloat;
 typedef struct {
     qdcint xSize;
     qdcint ySize;
+    qdcfloat lambda;
+
     /* X  Y  */ qdcint *count;
     /* X  Y  */ qdcfloat *sum;
     /* X  Y  */ qdcfloat *value; // if count, sum / count
@@ -61,7 +64,7 @@ qdcint fgetd(FILE *input) {
 
     while (1) {
         new = fgetc(input);
-        if (new >= '0' && new <= '9') {
+        if (new >= '0'/* && new <= '9'*/) {
             result = result * 10 + (new - '0');
         } else {
             break;
@@ -76,7 +79,7 @@ void fgetdi(FILE *input) {
 
     while (1) {
         new = fgetc(input);
-        if (new >= '0' && new <= '9') {
+        if (new >= '0'/* && new <= '9'*/) {
             // nothing
         } else {
             break;
@@ -97,7 +100,7 @@ qdcfloat fgetf(FILE *input) {
 
     while (1) {
         new = fgetc(input);
-        if (new >= '0' && new <= '9') {
+        if (new >= '0'/* && new <= '9'*/) {
             result = result * 10 + (new - '0');
         } else {
             break;
@@ -106,7 +109,7 @@ qdcfloat fgetf(FILE *input) {
 
     while (1) {
         new = fgetc(input);
-        if (new >= '0' && new <= '9') {
+        if (new >= '0'/* && new <= '9'*/) {
             result = result * 10 + (new - '0');
             count++;
         } else {
@@ -157,12 +160,13 @@ void qdcBaseInit() {
     }
 }
 
-qdcContext *qdcInit(qdcint x, qdcint y) {
+qdcContext *qdcInit(qdcint x, qdcint y, qdcfloat lambda) {
     qdcContext *result;
 
     result = (qdcContext *) malloc(sizeof(qdcContext));
     result->xSize = x;
     result->ySize = y;
+    result->lambda = lambda;
     result->count    = (qdcint   *) calloc(x * y, sizeof(qdcint));
     result->sum      = (qdcfloat *) calloc(x * y, sizeof(qdcfloat));
     result->value    = (qdcfloat *) calloc(x * y, sizeof(qdcfloat));
@@ -203,6 +207,7 @@ void qdcFileLoad(qdcContext *context, FILE *input) { // count sum
     // format: x y i value
     // "%ld %ld %*ld %f\n"
 #ifdef QDCEVIL
+    // for well-formatted data only
     x = 0;
     y = 0;
     QDCXY(count)--; // last line is null
@@ -293,7 +298,7 @@ void qdcAbove(qdcContext *context) { // xAbove yAbove
                 if (QDCXY(count)) {
                     QDCYX(yAbove) = QDCXY(value) - QDCY(yAve);
                 } else {
-                    QDCYX(yAbove) = 0; // for qdcSim()
+                    // QDCYX(yAbove) = 0; // for qdcSim()
                 }
             }
         }
@@ -305,7 +310,7 @@ void qdcAbove(qdcContext *context) { // xAbove yAbove
                 if (QDCXY(count)) {
                     QDCXY(xAbove) = QDCXY(value) - QDCX(xAve);
                 } else {
-                    QDCXY(xAbove) = 0; // for qdcSim()
+                    // QDCXY(xAbove) = 0; // for qdcSim()
                 }
             }
         }
@@ -317,6 +322,7 @@ void qdcRDelta(qdcContext *context) { // xRDelta yRDelta
     qdcint y;
     qdcfloat sum;
 
+    // TODO: is this (swap xAbove and yAbove) right ?
     QDCEachY() {
         if (QDCY(yCount)) {
             sum = 0;
@@ -414,7 +420,11 @@ void qdcPValue(qdcContext *context) { // xPValue yPValue
                 bsum = 0;
 
                 QDCEachY1() {
-                    if (QDCY1(yCount) && QDCYY(yySim) >= 0) {
+#ifdef QDCEVIL
+                    if (*(int *) &QDCYY(yySim) >= 0) { // check sign bit only
+#else
+                    if (QDCYY(yySim) >= 0) {
+#endif
                         sum += QDCYY(yySim) * QDCYXc(yAbove, x, y1);
                         bsum += QDCYY(yySim);
                     }
@@ -436,7 +446,11 @@ void qdcPValue(qdcContext *context) { // xPValue yPValue
                 bsum = 0;
 
                 QDCEachX1() {
-                    if (QDCX1(xCount) && QDCXX(xxSim) >= 0) {
+#ifdef QDCEVIL
+                    if (*(int *) &QDCXX(xxSim) >= 0) { // check sign bit only
+#else
+                    if (QDCXX(xxSim) >= 0) {
+#endif
                         sum += QDCXX(xxSim) * QDCXYc(xAbove, x1, y);
                         bsum += QDCXX(xxSim);
                     }
@@ -459,10 +473,7 @@ void qdcResult(qdcContext *context) { // result
     QDCEachY() {
         QDCEachX() {
             if (QDCX(xCount) && QDCY(yCount)) {
-                // take both
-                // TODO
-
-                QDCXY(result) = (qdcfloat) 0.5 * QDCXY(xPValue) + (qdcfloat) 0.5 * QDCXY(yPValue);
+                QDCXY(result) = context->lambda * QDCXY(xPValue) + (1 - context->lambda) * QDCXY(yPValue);
             } else if (QDCX(xCount)) {
                 QDCXY(result) = QDCXY(xPValue);
             } else if (QDCY(yCount)) {
@@ -510,6 +521,22 @@ qdcfloat qdcDelta(qdcContext *context) {
     return result;
 }
 
+qdcfloat qdcRelDelta(qdcContext *context) {
+    qdcint x;
+    qdcint y;
+    qdcfloat result = 0;
+
+    QDCEachY() {
+        QDCEachX() {
+            if (QDCXY(count)) {
+                result += sqr(QDCXY(value) - QDCXY(result)) / sqr(QDCXY(result));
+            }
+        }
+    }
+
+    return result;
+}
+
 void qdcFree(qdcContext *context) {
     free(context->count);
     free(context->sum);
@@ -535,20 +562,20 @@ int main() {
     FILE *input;
     FILE *output;
 
-    /* info */ printf("Init system\n");
+    QDCMessage("Init system");
     qdcBaseInit();
 
-    /* info */ printf("Allocate memory\n");
+    QDCMessage("Allocate memory");
 #ifdef QDCXFIRST
-    qdc = qdcInit(142, 4500);
+    qdc = qdcInit(142, 4500, 0.5);
 #else
-    qdc = qdcInit(4500, 142);
+    qdc = qdcInit(4500, 142, 0.5);
 #endif
-    /* info */ printf("Fill zero\n");
+    QDCMessage("Fill zero");
     qdcClear(qdc);
 
-    /* info */ printf("Load input\n");
-#ifdef QDCMEM
+    QDCMessage("Load input");
+#ifdef QDCMEMFILE
     input = fopen("/dev/shm/in.txt", "r");
 #else
     input = fopen("in.txt", "r");
@@ -556,31 +583,34 @@ int main() {
     qdcFileLoad(qdc, input);
     fclose(input);
 
-    /* info */ printf("Parse 1: value\n");
+    QDCMessage("Parse 1: value");
     qdcValue(qdc);
-    /* info */ printf("Parse 1: average\n");
+    QDCMessage("Parse 1: average");
     qdcAve(qdc);
-    /* info */ printf("Parse 1: above\n");
+    QDCMessage("Parse 1: above");
     qdcAbove(qdc);
-    /* info */ printf("Parse 2: rev delta\n");
+    QDCMessage("Parse 2: rev delta");
     qdcRDelta(qdc);
-    /* info */ printf("Parse 2: sim\n");
+    QDCMessage("Parse 2: sim");
     qdcSim(qdc);
     // TODO: filter sim(k), if small, set to 0
-    /* info */ printf("Parse 3: p value\n");
+    QDCMessage("Parse 3: p value");
     qdcPValue(qdc);
-    /* info */ printf("Parse 3: result\n");
+    QDCMessage("Parse 3: result");
     qdcResult(qdc);
 
-    /* info */ printf("Save output\n");
+    QDCMessage("Save output");
     output = fopen("out.txt", "w");
     qdcFileSave(qdc, output);
     fclose(output);
 
-    /* info */ printf("Calculate delta\n");
+    QDCMessage("Calculate delta");
     printf("Delta = %f\n", qdcDelta(qdc));
 
-    /* info */ printf("Free memory\n");
+    QDCMessage("Calculate rel delta");
+    printf("RelDelta = %f\n", qdcRelDelta(qdc));
+
+    QDCMessage("Free memory");
     qdcFree(qdc);
 
     return 0;
