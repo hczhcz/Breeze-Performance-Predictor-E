@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 
+// #define QDCEVIL
 #define QDCX(v) (context->v[x])
 #define QDCX1(v) (context->v[x1])
 #define QDCX2(v) (context->v[x2])
@@ -30,12 +32,14 @@ typedef struct {
     int *yCount;
     float *xAve; // if xCount
     float *yAve; // if yCount
+    float *xAbove; // if xCount
+    float *yAbove; // if yCount
     float *xRDelta; // if xCount
     float *yRDelta; // if yCount
-    float *xxSim;
-    float *yySim;
-    float *xxPValue;
-    float *yyPValue;
+    float *xxSim; // if x1 > x2 xCount1 xCount2
+    float *yySim; // if y1 > y2 yCount1 yCount2
+    float *xPValue;
+    float *yPValue;
     float *result;
 } qdcContext;
 
@@ -44,6 +48,7 @@ float sqr(float v) {
 }
 
 float rSqrt(float v) {
+#ifdef QDCEVIL
     int i;
     float half;
     float result;
@@ -52,13 +57,16 @@ float rSqrt(float v) {
     result = v;
 
     i = *(long *) &result;
-    i = 0x5f3759df - (i >> 1); // Evil!
+    i = 0x5f375a86 - (i >> 1); // Evil!
     result = *(float *) &i;
 
     result = result * (1.5 - (half * result * result));
     result = result * (1.5 - (half * result * result));
 
     return result;
+#else
+    return 1 / sqrt(v);
+#endif
 }
 
 float qdcRevBuf[65536];
@@ -85,15 +93,29 @@ qdcContext *qdcInit(int x, int y) {
     result->yCount   = (int   *) calloc(y    , sizeof(int));
     result->xAve     = (float *) calloc(x    , sizeof(float));
     result->yAve     = (float *) calloc(y    , sizeof(float));
+    result->xAbove   = (float *) calloc(x * y, sizeof(float));
+    result->yAbove   = (float *) calloc(x * y, sizeof(float));
     result->xRDelta  = (float *) calloc(x    , sizeof(float));
     result->yRDelta  = (float *) calloc(y    , sizeof(float));
     result->xxSim    = (float *) calloc(x * x, sizeof(float));
     result->yySim    = (float *) calloc(y * y, sizeof(float));
-    result->xxPValue = (float *) calloc(x * x, sizeof(float));
-    result->yyPValue = (float *) calloc(y * y, sizeof(float));
+    result->xPValue  = (float *) calloc(x * y, sizeof(float));
+    result->yPValue  = (float *) calloc(x * y, sizeof(float));
     result->result   = (float *) calloc(x * y, sizeof(float));
 
     return result;
+}
+
+void qdcClear(qdcContext *context) { // count sum = 0
+    int x;
+    int y;
+
+    QDCEachY() {
+        QDCEachX() {
+            QDCXY(sum) = 0;
+            QDCXY(count) = 0;
+        }
+    }
 }
 
 void qdcFileLoad(qdcContext *context, FILE *input) { // count sum
@@ -154,6 +176,31 @@ void qdcAve(qdcContext *context) { // xCount yCount xAve yAve
     }
 }
 
+void qdcAbove(qdcContext *context) { // xAbove yAbove
+    int x;
+    int y;
+
+    QDCEachY() {
+        if (QDCY(yCount)) {
+            QDCEachX() {
+                if (QDCXY(count)) {
+                    QDCXY(xAbove) = QDCXY(value) - QDCY(yAve);
+                }
+            }
+        }
+    }
+
+    QDCEachX() {
+        if (QDCX(xCount)) {
+            QDCEachY() {
+                if (QDCXY(count)) {
+                    QDCXY(yAbove) = QDCXY(value) - QDCX(xAve);
+                }
+            }
+        }
+    }
+}
+
 void qdcRDelta(qdcContext *context) { // xRDelta yRDelta
     int x;
     int y;
@@ -165,7 +212,7 @@ void qdcRDelta(qdcContext *context) { // xRDelta yRDelta
 
             QDCEachX() {
                 if (QDCXY(count)) {
-                    sum += sqr(QDCXY(value) - QDCY(yAve));
+                    sum += sqr(QDCXY(yAbove));
                 }
             }
 
@@ -179,7 +226,7 @@ void qdcRDelta(qdcContext *context) { // xRDelta yRDelta
 
             QDCEachY() {
                 if (QDCXY(count)) {
-                    sum += sqr(QDCXY(value) - QDCX(xAve));
+                    sum += sqr(QDCXY(xAbove));
                 }
             }
 
@@ -232,7 +279,7 @@ void qdcSim(qdcContext *context) { // xxSim yySim
     }
 }
 
-void qdcPValue(qdcContext *context) { // xxPValue yyPValue
+void qdcPValue(qdcContext *context) { // xPValue yPValue
 }
 
 void qdcResult(qdcContext *context) { // result
@@ -249,12 +296,14 @@ void qdcFree(qdcContext *context) {
     free(context->yCount);
     free(context->xAve);
     free(context->yAve);
+    free(context->xAbove);
+    free(context->yAbove);
     free(context->xRDelta);
     free(context->yRDelta);
     free(context->xxSim);
     free(context->yySim);
-    free(context->xxPValue);
-    free(context->yyPValue);
+    free(context->xPValue);
+    free(context->yPValue);
     free(context->result);
     free(context);
 }
@@ -267,6 +316,7 @@ int main() {
     qdcBaseInit();
 
     qdc = qdcInit(142, 4500);
+    qdcClear(qdc);
 
     input = fopen("in.txt", "r");
     qdcFileLoad(qdc, input);
@@ -274,6 +324,7 @@ int main() {
 
     qdcValue(qdc);
     qdcAve(qdc);
+    qdcAbove(qdc);
     qdcRDelta(qdc);
     qdcSim(qdc);
     qdcPValue(qdc);
