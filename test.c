@@ -2,8 +2,9 @@
 #include <stdio.h>
 #include <math.h>
 
-// #define QDCEVIL
 #define QDCMEM
+#define QDCEVIL
+// #define QDCXFIRST
 
 #define QDCX(v) (context->v[x])
 #define QDCX1(v) (context->v[x1])
@@ -13,9 +14,9 @@
 #define QDCY2(v) (context->v[y2])
 #define QDCXY(v) (context->v[(y  * context->xSize) + x ])
 #define QDCXX(v) (context->v[(x2 * context->xSize) + x1])
-#define QDCYY(v) (context->v[(y2 * context->xSize) + y1])
+#define QDCYY(v) (context->v[(y2 * context->ySize) + y1])
 #define QDCXXr(v) (context->v[(x1 * context->xSize) + x2])
-#define QDCYYr(v) (context->v[(y1 * context->xSize) + y2])
+#define QDCYYr(v) (context->v[(y1 * context->ySize) + y2])
 #define QDCXYc(v, x, y) (context->v[((y) * context->xSize) + (x)])
 #define QDCEachX() for (x = 0; x < context->xSize; ++x)
 #define QDCEachX1() for (x1 = 0; x1 < context->xSize; ++x1)
@@ -127,10 +128,24 @@ void qdcClear(qdcContext *context) { // count sum = 0
 void qdcFileLoad(qdcContext *context, FILE *input) { // count sum
     int x;
     int y;
-    int i;
     float value;
 
-    while (fscanf(input, "%d %d %d %f\n", &x, &y, &i, &value) == 4) {
+    // format: x y i value
+    // "%d %d %*d %f\n"
+/*#ifdef QDCEVIL
+    char buf[32];
+  #ifdef QDCXFIRST
+    while (fgets(buf, 32, input), sscanf(buf, "%d%d%*s%f", &x, &y, &value) == 3) {
+  #else
+    while (fgets(buf, 32, input), sscanf(buf, "%d%d%*s%f", &y, &x, &value) == 3) {
+  #endif
+#else*/
+  #ifdef QDCXFIRST
+    while (fscanf(input, "%d%d%*s%f", &x, &y, &value) == 3) {
+  #else
+    while (fscanf(input, "%d%d%*s%f", &y, &x, &value) == 3) {
+  #endif
+//#endif
         QDCXY(sum) += value;
         QDCXY(count)++;
     }
@@ -385,13 +400,20 @@ void qdcFileSave(qdcContext *context, FILE *output) {
     int x;
     int y;
 
-    // QDCEachY() {
+    // format: x y value result
+#ifdef QDCXFIRST
     QDCEachX() {
-        // QDCEachX() {
         QDCEachY() {
             fprintf(output, "%d %d %f %f\n", x, y, QDCXY(value), QDCXY(result));
         }
     }
+#else
+    QDCEachY() {
+        QDCEachX() {
+            fprintf(output, "%d %d %f %f\n", y, x, QDCXY(value), QDCXY(result));
+        }
+    }
+#endif
 }
 
 void qdcFree(qdcContext *context) {
@@ -423,7 +445,11 @@ int main() {
     qdcBaseInit();
 
     /* info */ printf("Allocate memory\n");
+#ifdef QDCXFIRST
     qdc = qdcInit(142, 4500);
+#else
+    qdc = qdcInit(4500, 142);
+#endif
     /* info */ printf("Fill zero\n");
     qdcClear(qdc);
 
