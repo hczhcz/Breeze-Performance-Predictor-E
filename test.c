@@ -29,30 +29,33 @@
 // #define QDCScan(p, begin, end) for (p = begin; p != end; ++p)
 // #define QDCEachX() for ()
 
+typedef long qdcint;
+typedef float qdcfloat;
+
 typedef struct {
-    int xSize;
-    int ySize;
-    /* X  Y  */ int *count;
-    /* X  Y  */ float *sum;
-    /* X  Y  */ float *value; // if count, sum / count
-    /* X     */ int *xCount;
-    /*    Y  */ int *yCount;
-    /* X     */ float *xAve; // if xCount
-    /*    Y  */ float *yAve; // if yCount
-    /* X  Y  */ float *xAbove; // if count xCount
-    /* X  Y  */ float *yAbove; // if count yCount
-    /* X     */ float *xRDelta; // if xCount
-    /*    Y  */ float *yRDelta; // if yCount
-    /* X1 X2 */ float *xxSim; // if xCount1 xCount2
-    /* Y1 Y2 */ float *yySim; // if yCount1 yCount2
-    /* X  Y  */ float *xPValue; // if xCount yCount
-    /* X  Y  */ float *yPValue; // if xCount yCount
-    /* X  Y  */ float *result;
+    qdcint xSize;
+    qdcint ySize;
+    /* X  Y  */ qdcint *count;
+    /* X  Y  */ qdcfloat *sum;
+    /* X  Y  */ qdcfloat *value; // if count, sum / count
+    /* X     */ qdcint *xCount;
+    /*    Y  */ qdcint *yCount;
+    /* X     */ qdcfloat *xAve; // if xCount
+    /*    Y  */ qdcfloat *yAve; // if yCount
+    /* X  Y  */ qdcfloat *xAbove; // if count xCount
+    /* X  Y  */ qdcfloat *yAbove; // if count yCount
+    /* X     */ qdcfloat *xRDelta; // if xCount
+    /*    Y  */ qdcfloat *yRDelta; // if yCount
+    /* X1 X2 */ qdcfloat *xxSim; // if xCount1 xCount2
+    /* Y1 Y2 */ qdcfloat *yySim; // if yCount1 yCount2
+    /* X  Y  */ qdcfloat *xPValue; // if xCount yCount
+    /* X  Y  */ qdcfloat *yPValue; // if xCount yCount
+    /* X  Y  */ qdcfloat *result;
 } qdcContext;
 
-int fgetd(FILE *input) {
-    int result = 0;
-    int new;
+qdcint fgetd(FILE *input) {
+    qdcint result = 0;
+    qdcint new;
 
     while (1) {
         new = fgetc(input);
@@ -67,7 +70,7 @@ int fgetd(FILE *input) {
 }
 
 void fgetdi(FILE *input) {
-    int new;
+    qdcint new;
 
     while (1) {
         new = fgetc(input);
@@ -79,16 +82,25 @@ void fgetdi(FILE *input) {
     }
 }
 
-float fgetff(FILE *input) {
-    const float rev10[16] = {
+qdcfloat fgetf(FILE *input) {
+    const qdcfloat rev10[16] = {
         1,     1e-1,  1e-2,  1e-3,
         1e-4,  1e-5,  1e-6,  1e-7,
         1e-8,  1e-9,  1e-10, 1e-11,
         1e-12, 1e-13, 1e-14, 1e-15,
     };
-    int result = 0;
-    int count = 0;
-    int new;
+    qdcint result = 0;
+    qdcint count = 0;
+    qdcint new;
+
+    while (1) {
+        new = fgetc(input);
+        if (new >= '0' && new <= '9') {
+            result = result * 10 + (new - '0');
+        } else {
+            break;
+        }
+    }
 
     while (1) {
         new = fgetc(input);
@@ -100,38 +112,29 @@ float fgetff(FILE *input) {
         }
     }
 
-    return rev10[count] * (float) result;
+    return rev10[count] * result;
 }
 
-float fgetf(FILE *input) {
-    float a = 0;
-    float b = 0;
-
-    a = fgetd(input);
-    b = fgetff(input);
-
-    return a + b;
-}
-
-float sqr(float v) {
+qdcfloat sqr(qdcfloat v) {
     return v * v;
 }
 
-float rSqrt(float v) {
-#ifdef QDCEVIL
-    int i;
+qdcfloat rSqrt(qdcfloat v) {
+// #ifdef QDCEVIL
+#if 0
+    qdcint i;
     float half;
     float result;
 
-    half = v * 0.5;
+    half = v * 0.5f;
     result = v;
 
     i = *(long *) &result;
     i = 0x5f375a86 - (i >> 1); // Evil!
-    result = *(float *) &i;
+    result = *(qdcfloat *) &i;
 
-    result = result * (1.5 - (half * result * result));
-    result = result * (1.5 - (half * result * result));
+    result = result * (1.5f - (half * result * result));
+    result = result * (1.5f - (half * result * result));
 
     return result;
 #else
@@ -139,46 +142,46 @@ float rSqrt(float v) {
 #endif
 }
 
-float qdcRevBuf[65536];
+qdcfloat qdcRevBuf[65536];
 
 void qdcBaseInit() {
-    int i;
+    qdcint i;
 
     qdcRevBuf[0] = 0;
     for (i = 1; i < 65536; ++i) {
-        qdcRevBuf[i] = 1.0 / (float) i;
+        qdcRevBuf[i] = (qdcfloat) 1.0 / (qdcfloat) i;
     }
 }
 
-qdcContext *qdcInit(int x, int y) {
+qdcContext *qdcInit(qdcint x, qdcint y) {
     qdcContext *result;
 
     result = (qdcContext *) malloc(sizeof(qdcContext));
     result->xSize = x;
     result->ySize = y;
-    result->count    = (int   *) calloc(x * y, sizeof(int));
-    result->sum      = (float *) calloc(x * y, sizeof(float));
-    result->value    = (float *) calloc(x * y, sizeof(float));
-    result->xCount   = (int   *) calloc(x    , sizeof(int));
-    result->yCount   = (int   *) calloc(y    , sizeof(int));
-    result->xAve     = (float *) calloc(x    , sizeof(float));
-    result->yAve     = (float *) calloc(y    , sizeof(float));
-    result->xAbove   = (float *) calloc(x * y, sizeof(float));
-    result->yAbove   = (float *) calloc(x * y, sizeof(float));
-    result->xRDelta  = (float *) calloc(x    , sizeof(float));
-    result->yRDelta  = (float *) calloc(y    , sizeof(float));
-    result->xxSim    = (float *) calloc(x * x, sizeof(float));
-    result->yySim    = (float *) calloc(y * y, sizeof(float));
-    result->xPValue  = (float *) calloc(x * y, sizeof(float));
-    result->yPValue  = (float *) calloc(x * y, sizeof(float));
-    result->result   = (float *) calloc(x * y, sizeof(float));
+    result->count    = (qdcint   *) calloc(x * y, sizeof(qdcint));
+    result->sum      = (qdcfloat *) calloc(x * y, sizeof(qdcfloat));
+    result->value    = (qdcfloat *) calloc(x * y, sizeof(qdcfloat));
+    result->xCount   = (qdcint   *) calloc(x    , sizeof(qdcint));
+    result->yCount   = (qdcint   *) calloc(y    , sizeof(qdcint));
+    result->xAve     = (qdcfloat *) calloc(x    , sizeof(qdcfloat));
+    result->yAve     = (qdcfloat *) calloc(y    , sizeof(qdcfloat));
+    result->xAbove   = (qdcfloat *) calloc(x * y, sizeof(qdcfloat));
+    result->yAbove   = (qdcfloat *) calloc(x * y, sizeof(qdcfloat));
+    result->xRDelta  = (qdcfloat *) calloc(x    , sizeof(qdcfloat));
+    result->yRDelta  = (qdcfloat *) calloc(y    , sizeof(qdcfloat));
+    result->xxSim    = (qdcfloat *) calloc(x * x, sizeof(qdcfloat));
+    result->yySim    = (qdcfloat *) calloc(y * y, sizeof(qdcfloat));
+    result->xPValue  = (qdcfloat *) calloc(x * y, sizeof(qdcfloat));
+    result->yPValue  = (qdcfloat *) calloc(x * y, sizeof(qdcfloat));
+    result->result   = (qdcfloat *) calloc(x * y, sizeof(qdcfloat));
 
     return result;
 }
 
 void qdcClear(qdcContext *context) { // count sum = 0
-    int x;
-    int y;
+    qdcint x;
+    qdcint y;
 
     QDCEachY() {
         QDCEachX() {
@@ -189,12 +192,12 @@ void qdcClear(qdcContext *context) { // count sum = 0
 }
 
 void qdcFileLoad(qdcContext *context, FILE *input) { // count sum
-    int x;
-    int y;
-    float value;
+    qdcint x;
+    qdcint y;
+    qdcfloat value;
 
     // format: x y i value
-    // "%d %d %*d %f\n"
+    // "%ld %ld %*ld %lf\n"
 #ifdef QDCEVIL
     x = 0;
     y = 0;
@@ -212,9 +215,9 @@ void qdcFileLoad(qdcContext *context, FILE *input) { // count sum
         value = fgetf(input);
 #else
   #ifdef QDCXFIRST
-    while (fscanf(input, "%d%d%*s%f", &x, &y, &value) == 3) {
+    while (fscanf(input, "%ld%ld%*s%f", &x, &y, &value) == 3) {
   #else
-    while (fscanf(input, "%d%d%*s%f", &y, &x, &value) == 3) {
+    while (fscanf(input, "%ld%ld%*s%f", &y, &x, &value) == 3) {
   #endif
 #endif
         QDCXY(sum) += value;
@@ -223,8 +226,8 @@ void qdcFileLoad(qdcContext *context, FILE *input) { // count sum
 }
 
 void qdcValue(qdcContext *context) { // value
-    int x;
-    int y;
+    qdcint x;
+    qdcint y;
 
     QDCEachY() {
         QDCEachX() {
@@ -236,10 +239,10 @@ void qdcValue(qdcContext *context) { // value
 }
 
 void qdcAve(qdcContext *context) { // xCount yCount xAve yAve
-    int x;
-    int y;
-    int count;
-    float sum;
+    qdcint x;
+    qdcint y;
+    qdcint count;
+    qdcfloat sum;
 
     QDCEachY() {
         count = 0;
@@ -277,8 +280,8 @@ void qdcAve(qdcContext *context) { // xCount yCount xAve yAve
 }
 
 void qdcAbove(qdcContext *context) { // xAbove yAbove
-    int x;
-    int y;
+    qdcint x;
+    qdcint y;
 
     QDCEachY() {
         if (QDCY(yCount)) {
@@ -306,9 +309,9 @@ void qdcAbove(qdcContext *context) { // xAbove yAbove
 }
 
 void qdcRDelta(qdcContext *context) { // xRDelta yRDelta
-    int x;
-    int y;
-    float sum;
+    qdcint x;
+    qdcint y;
+    qdcfloat sum;
 
     QDCEachY() {
         if (QDCY(yCount)) {
@@ -340,14 +343,14 @@ void qdcRDelta(qdcContext *context) { // xRDelta yRDelta
 }
 
 void qdcSim(qdcContext *context) { // xxSim yySim
-    int x;
-    int y;
-    int x1;
-    int x2;
-    int y1;
-    int y2;
-    float sum;
-    float result;
+    qdcint x;
+    qdcint y;
+    qdcint x1;
+    qdcint x2;
+    qdcint y1;
+    qdcint y2;
+    qdcfloat sum;
+    qdcfloat result;
 
     QDCEachY2() {
         if (QDCY2(yCount)) {
@@ -391,14 +394,14 @@ void qdcSim(qdcContext *context) { // xxSim yySim
 }
 
 void qdcPValue(qdcContext *context) { // xPValue yPValue
-    int x;
-    int y;
-    int x1;
-    int x2;
-    int y1;
-    int y2;
-    float sum;
-    float bsum;
+    qdcint x;
+    qdcint y;
+    qdcint x1;
+    qdcint x2;
+    qdcint y1;
+    qdcint y2;
+    qdcfloat sum;
+    qdcfloat bsum;
 
     QDCEachX() {
         QDCEachY2() {
@@ -446,8 +449,8 @@ void qdcPValue(qdcContext *context) { // xPValue yPValue
 }
 
 void qdcResult(qdcContext *context) { // result
-    int x;
-    int y;
+    qdcint x;
+    qdcint y;
 
     QDCEachY() {
         QDCEachX() {
@@ -455,7 +458,7 @@ void qdcResult(qdcContext *context) { // result
                 // take both
                 // TODO
 
-                QDCXY(result) = 0.5 * QDCXY(xPValue) + 0.5 * QDCXY(yPValue);
+                QDCXY(result) = (qdcfloat) 0.5 * QDCXY(xPValue) + (qdcfloat) 0.5 * QDCXY(yPValue);
             } else if (QDCX(xCount)) {
                 QDCXY(result) = QDCXY(xPValue);
             } else if (QDCY(yCount)) {
@@ -468,20 +471,20 @@ void qdcResult(qdcContext *context) { // result
 }
 
 void qdcFileSave(qdcContext *context, FILE *output) {
-    int x;
-    int y;
+    qdcint x;
+    qdcint y;
 
     // format: x y value result
 #ifdef QDCXFIRST
     QDCEachX() {
         QDCEachY() {
-            fprintf(output, "%d %d %f %f\n", x, y, QDCXY(value), QDCXY(result));
+            fprintf(output, "%ld %ld %lf %lf\n", x, y, QDCXY(value), QDCXY(result));
         }
     }
 #else
     QDCEachY() {
         QDCEachX() {
-            fprintf(output, "%d %d %f %f\n", y, x, QDCXY(value), QDCXY(result));
+            fprintf(output, "%ld %ld %lf %lf\n", y, x, QDCXY(value), QDCXY(result));
         }
     }
 #endif
